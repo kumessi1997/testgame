@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#FBEFD9">
+  <title>Crown the Cub</title>
+  <meta name="description" content="Cờ thú 3×4 – chơi với máy hoặc với bạn.">
+  <style>
+    :root {
+      --page: #fbefd9;
+      --ink: #4a2614;
+      --muted: #8a6a44;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) { --page: #2a1c12; --ink: #fbefd9; --muted: #c9a97f; }
+    }
+    :root[data-theme="dark"] { --page: #2a1c12; --ink: #fbefd9; --muted: #c9a97f; }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: var(--page);
+      color: var(--ink);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      overflow: hidden;
+    }
+    main {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+    /* The game is laid out for a 390 × 844 phone screen. */
+    .stage {
+      position: relative;
+      height: 100%;
+      max-height: 100dvh;
+      aspect-ratio: 390 / 844;
+      max-width: 100vw;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;          /* taps and drags go to the game, not the page */
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .status {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      padding: 24px;
+      font-size: 15px;
+      color: var(--muted);
+      pointer-events: none;
+    }
+    .status[hidden] { display: none; }
+    .status strong { display: block; color: var(--ink); font-size: 17px; margin-bottom: 6px; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="stage">
+      <canvas id="game" aria-label="Crown the Cub"></canvas>
+      <div class="status" id="status">Đang tải…</div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@rive-app/webgl2@2.47.1/rive.js"></script>
+  <script>
+    (function () {
+      var canvas = document.getElementById('game');
+      var status = document.getElementById('status');
+
+      function fail(message) {
+        status.hidden = false;
+        status.innerHTML = '<div><strong>Không tải được game</strong>' + message + '</div>';
+      }
+
+      if (location.protocol === 'file:') {
+        fail('Hãy mở trang qua một web server (ví dụ <code>python3 -m http.server</code>), không mở trực tiếp file.');
+        return;
+      }
+      if (!window.rive) {
+        fail('Không tải được Rive runtime từ CDN. Kiểm tra kết nối mạng.');
+        return;
+      }
+
+      var game = new rive.Rive({
+        src: 'myproject.riv',
+        canvas: canvas,
+        artboard: 'Main',
+        stateMachines: 'Flow Machine',
+        autoplay: true,
+        autoBind: true,           // binds the file's default view model instance
+        layout: new rive.Layout({ fit: rive.Fit.Contain, alignment: rive.Alignment.Center }),
+        onLoad: function () {
+          status.hidden = true;
+          game.resizeDrawingSurfaceToCanvas();
+        },
+        onLoadError: function () {
+          fail('File myproject.riv không mở được.');
+        }
+      });
+
+      var resizeTimer = 0;
+      window.addEventListener('resize', function () {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(function () { game.resizeDrawingSurfaceToCanvas(); }, 60);
+      });
+    })();
+  </script>
+</body>
+</html>

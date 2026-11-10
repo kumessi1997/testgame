@@ -1,0 +1,11 @@
+name: myproject
+main: Main
+excludeFromRev:
+  scripts:
+    - "*_test"
+logs:
+  file: build/rive.log
+  problems: build/problems.log
+push:
+  projectId: 1506855
+  fileId: 2715332
