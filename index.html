@@ -61,6 +61,28 @@
       pointer-events: none;
     }
     .status[hidden] { display: none; }
+    .sound {
+      position: absolute;
+      /* Beside the bot's tray: the corners hold the Menu and Hints buttons in play. */
+      top: 14.8%;
+      right: 1.5%;
+      width: 10.5%;
+      aspect-ratio: 1;
+      padding: 2%;
+      border: 2px solid #7a4a22;
+      border-radius: 50%;
+      background: #fff6e3;
+      color: #7a4a22;
+      cursor: pointer;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .sound[hidden] { display: none; }
+    .sound:focus-visible { outline: 3px solid #e3a534; outline-offset: 2px; }
+    .sound svg { display: block; width: 100%; height: 100%; }
+    .sound .off { display: none; }
+    .sound[aria-pressed="true"] .on { display: none; }
+    .sound[aria-pressed="true"] .off { display: inline; }
     .status strong { display: block; color: var(--ink); font-size: 17px; margin-bottom: 6px; }
   </style>
 </head>
@@ -69,6 +91,13 @@
     <div class="stage">
       <canvas id="game" aria-label="Crown the Cub"></canvas>
       <div class="status" id="status">Đang tải…</div>
+      <button class="sound" id="sound" type="button" aria-pressed="false" aria-label="Tắt tiếng" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5H4z" fill="currentColor"/>
+          <path class="on" d="M15.5 9a4.2 4.2 0 0 1 0 6M18 6.5a7.8 7.8 0 0 1 0 11"/>
+          <path class="off" d="M16 9.5l5 5M21 9.5l-5 5"/>
+        </svg>
+      </button>
     </div>
   </main>
 
@@ -92,7 +121,119 @@
         return;
       }
 
-      var game = new rive.Rive({
+      // Background music plays here; sound effects play from inside the .riv.
+      // bgm.mp3 repeats its loop's edges around it, so the loop points stay seamless
+      // whatever delay the MP3 decoder adds.
+      var MUSIC_URL = 'audio/bgm.mp3';
+      var LOOP_START = 0.25;
+      var LOOP_END = 113.43033;
+      var MUSIC_LEVEL = 0.6;
+      var DUCKED_LEVEL = 0.12;
+      var RESULT_SOUND_SECONDS = 4.2;
+      var UNLOCK_EVENTS = ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'];
+
+      var soundButton = document.getElementById('sound');
+      var muted = false;
+      var ducked = false;
+      var duckTimer = 0;
+      var audioContext = null;
+      var musicGain = null;
+      var musicData = null;
+      var musicStarted = false;
+      var game = null;
+
+      try { muted = localStorage.getItem('crown-the-cub-muted') === '1'; } catch (e) {}
+
+      function applyMusicLevel() {
+        if (!musicGain) return;
+        var level = muted ? 0 : (ducked ? DUCKED_LEVEL : MUSIC_LEVEL);
+        musicGain.gain.setTargetAtTime(level, audioContext.currentTime, 0.12);
+      }
+
+      function applySound() {
+        soundButton.setAttribute('aria-pressed', muted ? 'true' : 'false');
+        soundButton.setAttribute('aria-label', muted ? 'Bật tiếng' : 'Tắt tiếng');
+        if (game) game.volume = muted ? 0 : 1;
+        applyMusicLevel();
+      }
+
+      function startMusic() {
+        if (musicStarted || !audioContext || !musicData) return;
+        musicStarted = true;
+        audioContext.decodeAudioData(musicData, function (buffer) {
+          var source = audioContext.createBufferSource();
+          source.buffer = buffer;
+          source.loop = true;
+          source.loopStart = LOOP_START;
+          source.loopEnd = LOOP_END;
+          source.connect(musicGain);
+          source.start(0, LOOP_START);
+        }, function () {});
+      }
+
+      // Browsers only allow sound after the player touches the page.
+      function unlockAudio() {
+        var Context = window.AudioContext || window.webkitAudioContext;
+        if (!Context) return;
+        if (!audioContext) {
+          audioContext = new Context();
+          musicGain = audioContext.createGain();
+          musicGain.gain.value = 0;
+          musicGain.connect(audioContext.destination);
+          applyMusicLevel();
+          startMusic();
+        }
+        audioContext.resume();
+        if (audioContext.state === 'running') {
+          UNLOCK_EVENTS.forEach(function (name) {
+            document.removeEventListener(name, unlockAudio, true);
+          });
+        }
+      }
+      UNLOCK_EVENTS.forEach(function (name) {
+        document.addEventListener(name, unlockAudio, true);
+      });
+
+      document.addEventListener('visibilitychange', function () {
+        if (!audioContext) return;
+        if (document.hidden) audioContext.suspend(); else audioContext.resume();
+      });
+
+      soundButton.addEventListener('click', function () {
+        muted = !muted;
+        try { localStorage.setItem('crown-the-cub-muted', muted ? '1' : '0'); } catch (e) {}
+        applySound();
+      });
+
+      fetch(MUSIC_URL).then(function (response) {
+        if (!response.ok) throw new Error('music');
+        return response.arrayBuffer();
+      }).then(function (data) {
+        musicData = data;
+        startMusic();
+      }).catch(function () {});
+
+      // The music steps back while the win or lose sound plays.
+      function duckMusic() {
+        ducked = true;
+        applyMusicLevel();
+        clearTimeout(duckTimer);
+        duckTimer = setTimeout(function () {
+          ducked = false;
+          applyMusicLevel();
+        }, RESULT_SOUND_SECONDS * 1000);
+      }
+
+      function listenForResultSounds() {
+        var data = game.viewModelInstance;
+        if (!data) return;
+        ['sfxWin', 'sfxLose'].forEach(function (name) {
+          var trigger = data.trigger(name);
+          if (trigger) trigger.on(duckMusic);
+        });
+      }
+
+      game = new rive.Rive({
         src: 'myproject.riv',
         canvas: canvas,
         artboard: 'Main',
@@ -103,6 +244,9 @@
         onLoad: function () {
           status.hidden = true;
           game.resizeDrawingSurfaceToCanvas();
+          soundButton.hidden = false;
+          applySound();
+          listenForResultSounds();
         },
         onLoadError: function () {
           fail('File myproject.riv không mở được.');
