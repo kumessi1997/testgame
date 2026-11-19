@@ -40,6 +40,7 @@
       max-height: 100dvh;
       aspect-ratio: 390 / 844;
       max-width: 100vw;
+      container-type: size;        /* lets the sound button size itself in cqw */
     }
     canvas {
       display: block;
@@ -66,9 +67,21 @@
       /* Beside the bot's tray: the corners hold the Menu and Hints buttons in play. */
       top: 14.8%;
       right: 1.5%;
+      /* Same width and height, both from the stage width, so the circle never
+         stretches (aspect-ratio and % padding on <button> are unreliable in Safari). */
       width: 10.5%;
       aspect-ratio: 1;
-      padding: 2%;
+      width: 10.5cqw;
+      height: 10.5cqw;
+      min-width: 0;
+      min-height: 0;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      place-items: center;
+      -webkit-appearance: none;
+      appearance: none;
+      line-height: 0;
       border: 2px solid #7a4a22;
       border-radius: 50%;
       background: #fff6e3;
@@ -79,7 +92,7 @@
     }
     .sound[hidden] { display: none; }
     .sound:focus-visible { outline: 3px solid #e3a534; outline-offset: 2px; }
-    .sound svg { display: block; width: 100%; height: 100%; }
+    .sound svg { display: block; width: 58%; height: 58%; flex: none; }
     .sound .off { display: none; }
     .sound[aria-pressed="true"] .on { display: none; }
     .sound[aria-pressed="true"] .off { display: inline; }
